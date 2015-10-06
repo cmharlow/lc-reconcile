@@ -101,7 +101,19 @@ def search(raw_query, query_type='/lc'):
         #Get score for label found
         score_1 = fuzz.token_sort_ratio(query, text.normalize(name, PY3))
         score = score_1
-        # THIS IS WHERE I WILL GRAB ALTLABELS FROM URI.SKOS.NT ONCE I GET THAT PART WORKING => GIT BRANCH ALTLABEL
+        '''
+        #Get cross-refs from URI SKOS Ntriples graph - if exist, compare against name for highest score
+        crossRef = rdflib.Graph()
+        crossRefnt = crossRef.parse(lc_uri + '.skos.nt', format='n3')
+        uri = rdflib.URIRef(lc_uri)
+        for alt in crossRefnt.objects(subject=uri, predicate=SKOS.altLabel):
+            try:
+                score_2 = fuzz.token_sort_ratio(query, text.normalize(alt, PY3))
+                score = max(score_1, score_2)
+                return score
+            except StopIteration:
+                break
+        '''
         if score > 95:
             match = True
         app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + lc_uri)
