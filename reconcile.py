@@ -30,19 +30,19 @@ except ImportError:
 
 #Map the LoC query indexes to service types
 default_query = {
-    "id": "/lc",
+    "id": "LoC",
     "name": "LCNAF & LCSH",
     "index": "/authorities"
 }
 
 refine_to_lc = [
     {
-        "id": "/lc/names",
+        "id": "Names",
         "name": "Library of Congress Name Authority File",
         "index": "/authorities/names"
     },
     {
-        "id": "/lc/subjects",
+        "id": "Subjects",
         "name": "Library of Congress Subject Headings",
         "index": "/authorities/subjects"
     }
@@ -58,7 +58,7 @@ metadata = {
     "defaultTypes": query_types,
     "view": {
         "url": "{{id}}"
-    }
+    },
 }
 
 def jsonpify(obj):
@@ -98,10 +98,14 @@ def search(raw_query, query_type='/lc'):
         match = False
         name = results[1][n]
         lc_uri = results[3][n]
-        #Get score for label found
-        score_1 = fuzz.token_sort_ratio(query, text.normalize(name, PY3))
-        score = score_1
-        # THIS IS WHERE I WILL GRAB ALTLABELS FROM URI.SKOS.NT ONCE I GET THAT PART WORKING => GIT BRANCH ALTLABEL
+        #Get cross-refs from URI SKOS Ntriples graph for query results - if exist, compare against name for highest score
+        crossRef = rdflib.Graph()
+        crossRefnt = crossRef.parse(lc_uri + '.skos.nt', format='n3')
+        uri = rdflib.URIRef(lc_uri)
+        xrefs = crossRefnt.objects(subject=uri, predicate=SKOS.altLabel)
+        #Get max score for label found and cross-refs
+        def labelsScore(foundLabel): return fuzz.token_sort_ratio(query, text.normalize(foundLabel, PY3))
+        score = reduce(max,map(labelsScore,xrefs),labelsScore(name))
         if score > 95:
             match = True
         app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + lc_uri)

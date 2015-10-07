@@ -1,16 +1,12 @@
 """
 Taken from the Helmut project.
 https://github.com/okfn/helmut/blob/master/helmut/text.py
+In process of being reviewed, modified, for LoC optimization.
 """
 
 from unicodedata import normalize as ucnorm, category
 
 def normalize(text, PY3):
-    """ Simplify a piece of text to generate a more canonical
-    representation. This involves lowercasing, stripping trailing
-    spaces, removing symbols, diacritical marks (umlauts) and
-    converting all newlines etc. to single spaces.
-    """
     if PY3:
         if not isinstance(text, str):
             str(text, 'utf-8')
@@ -30,7 +26,7 @@ def normalize(text, PY3):
         elif cat.startswith('Z'):
             # newlines, non-breaking etc.
             filtered.append(' ')
-        elif cat.startswith('S'):
+        # elif cat.startswith('S'):
             # symbols, such as currency
             continue
         else:
