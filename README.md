@@ -4,7 +4,7 @@ An OpenRefine reconciliation service for the Library of Congress Subject Heading
 
 **Tested with, working on python 2.7.10, 3.4.3**
 
-Hosted version at https://lc-reconcile.herokuapp.com/
+Hosted version at https://lc-reconcile.herokuapp.com/ - works, but easily gets overloaded. Will move to better hosted server option in near future. For big recon jobs, its recommended to download this repo and run locally.
 
 To run the hosted version:
 
