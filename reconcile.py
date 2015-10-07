@@ -94,26 +94,18 @@ def search(raw_query, query_type='/lc'):
     except getopt.GetoptError as e:
         app.logger.warning(e)
         return out
+    def score_xref(xref): return fuzz.token_sort_ratio(query, text.normalize(xref, PY3))
     for n in range(0, len(results[1])):
         match = False
         name = results[1][n]
         lc_uri = results[3][n]
-        #Get score for label found
-        score_1 = fuzz.token_sort_ratio(query, text.normalize(name, PY3))
-        score = score_1
-        '''
         #Get cross-refs from URI SKOS Ntriples graph - if exist, compare against name for highest score
         crossRef = rdflib.Graph()
         crossRefnt = crossRef.parse(lc_uri + '.skos.nt', format='n3')
         uri = rdflib.URIRef(lc_uri)
-        for alt in crossRefnt.objects(subject=uri, predicate=SKOS.altLabel):
-            try:
-                score_2 = fuzz.token_sort_ratio(query, text.normalize(alt, PY3))
-                score = max(score_1, score_2)
-                return score
-            except StopIteration:
-                break
-        '''
+        #Get max score for label found and cross-refs
+        xrefs = crossRefnt.objects(subject=uri, predicate=SKOS.altLabel)
+        score = reduce(max,map(score_xref,xrefs),score_xref(name))
         if score > 95:
             match = True
         app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + lc_uri)
