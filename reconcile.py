@@ -3,6 +3,7 @@ An OpenRefine reconciliation service for the id.loc.gov LCNAF/LCSH suggest API.
 """
 from flask import Flask, request, jsonify
 from fuzzywuzzy import fuzz
+import getopt
 import json
 from operator import itemgetter
 import rdflib
@@ -10,25 +11,25 @@ from rdflib.namespace import SKOS
 import requests
 from sys import version_info
 import urllib
-
-#Help text processing
+import xml.etree.ElementTree as ET
+# Help text processing
 import text
 
 app = Flask(__name__)
 
-#See if Python 3 for unicode/str use decisions
+# See if Python 3 for unicode/str use decisions
 PY3 = version_info > (3,)
 
-#If it's installed, use the requests_cache library to
-#cache calls to the FAST API.
+# If it's installed, use the requests_cache library to
+# cache calls to the FAST API.
 try:
     import requests_cache
-    requests_cache.install_cache('fast_cache')
+    requests_cache.install_cache('lc_cache')
 except ImportError:
     app.logger.debug("No request cache found.")
     pass
 
-#Map the LoC query indexes to service types
+# Map the LoC query indexes to service types
 default_query = {
     "id": "LoC",
     "name": "LCNAF & LCSH",
@@ -49,7 +50,7 @@ refine_to_lc = [
 ]
 refine_to_lc.append(default_query)
 
-#Make a copy of the LC mappings.
+# Make a copy of the LC mappings.
 query_types = [{'id': item['id'], 'name': item['name']} for item in refine_to_lc]
 
 # Basic service metadata.
@@ -60,6 +61,7 @@ metadata = {
         "url": "{{id}}"
     },
 }
+
 
 def jsonpify(obj):
     """
@@ -73,21 +75,20 @@ def jsonpify(obj):
     except KeyError:
         return jsonify(obj)
 
+
 def search(raw_query, query_type='/lc'):
-    """
-    Hit the LoC Authorities API for names.
-    """
     out = []
     query = text.normalize(raw_query, PY3).strip()
     query_type_meta = [i for i in refine_to_lc if i['id'] == query_type]
     if query_type_meta == []:
         query_type_meta = default_query
     query_index = query_type_meta[0]['index']
+    # Get the results for the primary suggest API (primary headings, no cross-refs)
     try:
         if PY3:
-            url = "http://id.loc.gov" + query_index  + '/suggest/?q=' + urllib.parse.quote(query)
+            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query)
         else:
-            url = "http://id.loc.gov" + query_index  + '/suggest/?q=' + urllib.quote(query)
+            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query)
         app.logger.debug("LC Authorities API url is " + url)
         resp = requests.get(url)
         results = resp.json()
@@ -97,30 +98,84 @@ def search(raw_query, query_type='/lc'):
     for n in range(0, len(results[1])):
         match = False
         name = results[1][n]
-        lc_uri = results[3][n]
-        #Get cross-refs from URI SKOS Ntriples graph for query results - if exist, compare against name for highest score
-        crossRef = rdflib.Graph()
-        crossRefnt = crossRef.parse(lc_uri + '.skos.nt', format='n3')
-        uri = rdflib.URIRef(lc_uri)
-        xrefs = crossRefnt.objects(subject=uri, predicate=SKOS.altLabel)
-        #Get max score for label found and cross-refs
-        def labelsScore(foundLabel): return fuzz.token_sort_ratio(query, text.normalize(foundLabel, PY3))
-        score = reduce(max,map(labelsScore,xrefs),labelsScore(name))
+        uri = results[3][n]
+        score = fuzz.token_sort_ratio(query, name)
         if score > 95:
             match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + lc_uri)
+        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
         resource = {
-            "id": lc_uri,
+            "id": uri,
             "name": name,
             "score": score,
             "match": match,
             "type": query_type_meta
         }
         out.append(resource)
-    #Sort this list by score
+    # Get the results for the didyoumean API (cross-refs, no primary headings)
+    try:
+        if query_index != '/authorities':
+            if PY3:
+                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query)
+            else:
+                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query)
+            app.logger.debug("LC Authorities API url is " + url)
+            altresp = requests.get(url)
+            altresults = ET.fromstring(altresp.text)
+            altresults2 = None
+        else:
+            if PY3:
+                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query)
+                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query)
+            else:
+                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query)
+                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query)
+            app.logger.debug("LC Authorities API url is " + url)
+            app.logger.debug("LC Authorities API url is " + url2)
+            altresp = requests.get(url)
+            altresp2 = requests.get(url2)
+            altresults = ET.fromstring(altresp.text)
+            altresults2 = ET.fromstring(altresp2.text)
+    except getopt.GetoptError as e:
+        app.logger.warning(e)
+        return out
+    for child in altresults.iter('{http://id.loc.gov/ns/id_service#}term'):
+        match = False
+        name = child.text
+        uri = child.get('uri')
+        score = fuzz.token_sort_ratio(query, name)
+        if score > 95:
+            match = True
+        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+        resource = {
+            "id": uri,
+            "name": name,
+            "score": score,
+            "match": match,
+            "type": query_type_meta
+        }
+        out.append(resource)
+    if altresults2 is not None:
+        for child in altresults2.iter('{http://id.loc.gov/ns/id_service#}term'):
+            match = False
+            name = child.text
+            uri = child.get('uri')
+            score = fuzz.token_sort_ratio(query, name)
+            if score > 95:
+                match = True
+            app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+            resource = {
+                "id": uri,
+                "name": name,
+                "score": score,
+                "match": match,
+                "type": query_type_meta
+            }
+            out.append(resource)
+    # Sort this list containing preflabels and crossrefs by score
     sorted_out = sorted(out, key=itemgetter('score'), reverse=True)
-    #Refine only will handle top three matches.
+    # Refine only will handle top three matches.
     return sorted_out[:3]
+
 
 @app.route("/", methods=['POST', 'GET'])
 def reconcile():
@@ -142,8 +197,10 @@ def reconcile():
     # we should return the service metadata.
     return jsonpify(metadata)
 
+
 if __name__ == '__main__':
     from optparse import OptionParser
+
     oparser = OptionParser()
     oparser.add_option('-d', '--debug', action='store_true', default=False)
     opts, args = oparser.parse_args()
