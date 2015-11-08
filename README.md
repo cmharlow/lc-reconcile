@@ -35,6 +35,16 @@ To run the hosted version:
 
 Runs directly on localhost:5000 (no /reconcile needed for this recon service)
 
+##Plans for Improvement
+
+There are lots of improvements and repairs to this code forthcoming, but I needed a basic LCNAF Openrefine Recon Service 
+like yesterday for a massive metadata migration project. Please submit pull requests and/or issues on this for any 
+improvements or bugs found. 
+
+I do want to add a new service that can handle in-OpenRefine-project search refinements. The documentation sucks on this
+functionality for OpenRefine or the no-longer-existent Freebase API that it was built off of, so if you have any advice
+on this, please do let me know.
+
 ##Provenance
 
 Michael Stephens wrote a [demo reconciliation service](https://github.com/mikejs/reconcile-demo) and 
@@ -44,6 +54,57 @@ that this code modifies and builds off of.
 All of the access to [id.loc.gov](http://id.loc.gov/) that this OpenRefine Reconciliation service builds off of is 
 indebted to those who made/make id.loc.gov an option. Special thanks to Kevin Ford for reaching out and helping with 
 understanding the various id.loc.gov query options.
+
+##How This Service Handles Your Query
+
+This service takes the query from your OpenRefine project - i.e. the terms you have listed in your chosen column for reconciliation
+in your OpenRefine project - and according to the index you choose, works in this way at the moment:
+
+###For the LoC index (search LCNAF and LCSH at same time):
+
+1. Normalize the query with the text.py normalize function, edited for LC headings peculiarities.
+2. Run the query against the id.loc.gov Suggest API (see **Special Notes**) for both authorities and capture the returned possible matches based off of preferred labels.
+3. Run the query against the id.loc.gov DidYouMean API (see **Special Notes**) for both names then subjects, capture the returned possible matches
+ from both based off of alternate labels, and return all of those labels.
+4. Rank all the possible matches founded in steps 2 and 3 based off of fuzzy wuzzy matching/rankings between the original, normalized
+ query and the normalized returned labels.
+5. Return the top 3 results from step 4, along with their URIs.
+
+###For the LCNAF:
+
+1. Normalize the query with the text.py normalize function, edited for LC headings peculiarities.
+2. Run the query against the id.loc.gov Suggest API (see **Special Notes**) for names only and capture the returned possible matches based off of preferred labels.
+3. Run the query against the id.loc.gov DidYouMean API (see **Special Notes**) for names only and capture the returned possible matches based off of alternate labels.
+4. Rank all the possible matches founded in steps 2 and 3 based off of fuzzy wuzzy matching/rankings between the original, normalized
+ query and the normalized returned labels.
+5. Return the top 3 results from step 4, along with their URIs.
+
+###For the LCSH:
+
+1. Normalize the query with the text.py normalize function, edited for LC headings peculiarities.
+2. Run the query against the id.loc.gov Suggest API (see **Special Notes**) for subjects only and capture the returned possible matches based off of preferred labels.
+3. Run the query against the id.loc.gov DidYouMean API (see **Special Notes**) for subjects only and capture the returned possible matches based off of alternate labels.
+4. Rank all the possible matches founded in steps 2 and 3 based off of fuzzy wuzzy matching/rankings between the original, normalized
+ query and the normalized returned labels.
+5. Return the top 3 results from step 4, along with their URIs.
+
+###What I'm considering:
+
+Adding a new step 2 for all the above cases that first sees if there is an exact match found view id.loc.gov/authorities/label API (see **Special Notes**)
+and if such exists, return that as a match to OpenRefine, skipping the suggest and didyoumean (i.e. the fuzzy matching) services.
+
+###Why do this?
+
+The above allows us to take our OpenRefine terms - which could be any manner of format/style/etc. - and get the top results based
+off of both preferred and alternate labels in the LCSH and LCNAF (or just one as chosen). Using one of the id.loc.gov services mentioned below
+alone would only allow us to:
+
+1. find perfect matches only, missing fuzzy matching opportunities unless built out in this service
+2. find fuzzy matches based off of the preferred labels/headings only, missing cross-references or alternate labels, 
+3. find fuzzy matches based off of the alternate labels/cross-references only, missing out on the preferred labels.
+
+We cannot say for all OpenRefine projects or even metadata generally (which this service is built to handle) which of the above cases
+only we should target; instead, we want to support all of them and get the best results from the aggregates.
 
 ##Special Notes
 
@@ -262,6 +323,7 @@ returns those. Below is the response:
 ```
 
 * http://id.loc.gov/authorities/subjects/suggest/?q=TAFKAP
+* http://id.loc.gov/authorities/names/suggest/?q=TAFKAP
 * http://id.loc.gov/authorities/suggest/?q=TAFKAP
 
 The above, entered without other information into a web browser, return matches that don't include the Prince we're searching for. 
@@ -279,8 +341,112 @@ The above, entered without other information into a web browser, return matches 
 
 ###id.loc.gov/authorities/[names|subjects]/didyoumean/?label=QUERY
 
-##Plans for Improvement
+This is a service built into id.loc.gov that returns possible preferred labels and URIs for the top matches between QUERY 
+and cross-reference or alternate heading in a LCNAF/LCSH authority record from id.loc.gov. 
 
-There are lots of improvements and repairs to this code forthcoming, but I needed a basic LCNAF Openrefine Recon Service 
-like yesterday for a massive metadata migration project. Please submit pull requests and/or issues on this for any 
-improvements or bugs found. 
+As far as I can tell, it expects cross-reference or alternate labels for the QUERY, not the preferred headings/labels. 
+It will return up to 10 possible matches, with record URIs and preferred labels included, along with a match score. A 
+didyoumean QUERY that matches a preferred label will not return top results/matches based off the preferred label, but the
+top cross-references/alternate labels that match that QUERY instead. See the examples below.
+
+You must select either the LCSH or the LCNAF (i.e. authorities/names or authorities/subjects in the base URL pattern) for
+this to work. You cannot run this service for both LCSH and LCNAF at once.
+
+It will return a XML object, a simplified form of the response given below:
+
+```xml
+<idservice:service xmlns:idservice="http://id.loc.gov/ns/id_service#" service-name="didyoumean" search-status="success" search-hits="10" label-searched="QUERY">
+<idservice:term term-type="authorized" score="##" uri="http://id.loc.gov/authorities/names/match1URI">QUERY Matched Pref Label 1</idservice:term>
+<idservice:term term-type="authorized" score="##" uri="http://id.loc.gov/authorities/names/match2URI">QUERY Matched Pref Label 2</idservice:term>
+<idservice:term term-type="authorized" score="##" uri="http://id.loc.gov/authorities/names/match3URI">QUERY Matched Pref Label 3</idservice:term>
+...
+</idservice:service>
+```
+
+####Examples
+
+* http://id.loc.gov/authorities/names/didyoumean/?label=TAFKAP
+
+The above, entered without other information into a web browser, returns the following, containing a reference to the
+authority for the Prince entity we're searching:
+
+```xml
+<idservice:service xmlns:idservice="http://id.loc.gov/ns/id_service#" service-name="didyoumean" search-status="success" search-hits="1" label-searched="TAFKAP">
+<idservice:term term-type="authorized" score="13" uri="http://id.loc.gov/authorities/names/n84079379">Prince</idservice:term>
+</idservice:service>
+```
+
+* http://id.loc.gov/authorities/subjects/didyoumean/?label=TAFKAP
+
+The above, entered without other information into a web browser, returns the following - i.e. no results, as it searched
+the cross-references/alternate labels in the LCSH, not the LCNAF:
+
+```xml
+<idservice:service xmlns:idservice="http://id.loc.gov/ns/id_service#" service-name="didyoumean" search-status="success" search-hits="0" label-searched="TAFKAP"></idservice:service>
+```
+
+* http://id.loc.gov/authorities/didyoumean/?label=TAFKAP
+
+The above and any such URL configuration for the didyoumean service without either names or subjects included returns a
+generic id.loc.gov 404 Not found (service or entity).
+
+* http://id.loc.gov/authorities/names/didyoumean/?label=Prince
+
+The above URL, entered without other information into a web browser, returns the following results that searching the 
+NAF authorities cross-references or alternate labels only, hence no result that matches the Prince we mean (which is a
+preferred label for that authority record):
+
+```xml
+<idservice:service xmlns:idservice="http://id.loc.gov/ns/id_service#" service-name="didyoumean" search-status="success" search-hits="10" label-searched="Prince">
+<idservice:term term-type="authorized" score="13" uri="http://id.loc.gov/authorities/names/n94037457">Prince-A-Cuba (Prince Allah Cuba)</idservice:term>
+<idservice:term term-type="authorized" score="9" uri="http://id.loc.gov/authorities/names/n94085428">
+Prince George's Voluntary Action Center (Prince George's County, Md.)
+</idservice:term>
+<idservice:term term-type="authorized" score="9" uri="http://id.loc.gov/authorities/names/n2007016024">
+Prince George's County Agricultural Society (Prince George's County, Md.)
+</idservice:term>
+<idservice:term term-type="authorized" score="9" uri="http://id.loc.gov/authorities/names/n78052654">
+Prince Edward Island. Commission of Inquiry into the Purchase of Gregors-by-the-Sea Property by the Prince Edward Island Land Development Corporation and Sixty-Three (63) Acres of Land in East Royalty by the Prince Edward Island Housing Authority
+</idservice:term>
+<idservice:term term-type="authorized" score="7" uri="http://id.loc.gov/authorities/names/n86071268">Preston, Prince H. (Prince Hulon), 1908-1961</idservice:term>
+<idservice:term term-type="authorized" score="7" uri="http://id.loc.gov/authorities/names/no2005006134">
+Prince Edward Island. Laws, etc. (Acts of the General Assembly of Prince Edward Island)
+</idservice:term>
+<idservice:term term-type="authorized" score="5" uri="http://id.loc.gov/authorities/names/nb2010021742">
+Princes Risborough Baptist Church (Princes Risborough, England)
+</idservice:term>
+<idservice:term term-type="authorized" score="4" uri="http://id.loc.gov/authorities/names/n88087297">
+Task Force on Child Care in Prince George's County (Prince George's County, Md.)
+</idservice:term>
+<idservice:term term-type="authorized" score="3" uri="http://id.loc.gov/authorities/names/n2007028920">
+Prince Edward Island. Laws, etc. (Revised regulations of Prince Edward Island : 1979)
+</idservice:term>
+<idservice:term term-type="authorized" score="2" uri="http://id.loc.gov/authorities/names/n2007016025">
+Prince George's County Agricultural Society (Prince George's County, Md.). Proceedings
+</idservice:term>
+</idservice:service>
+```
+
+* http://id.loc.gov/authorities/subjects/didyoumean/?label=Prince
+
+The above URL, entered without other information into a web browser, returns the following results that searching the 
+LCSH authorities cross-references or alternate labels only, hence no result that matches the Prince we mean since it is 
+a preferred label for that NAF, not LCSH, authority record:
+
+```xml
+<idservice:service xmlns:idservice="http://id.loc.gov/ns/id_service#" service-name="didyoumean" search-status="success" search-hits="10" label-searched="Prince">
+<idservice:term term-type="authorized" score="10" uri="http://id.loc.gov/authorities/subjects/sh85106713">Prince Edward Island (Prince Edward Islands)</idservice:term>
+<idservice:term term-type="authorized" score="9" uri="http://id.loc.gov/authorities/subjects/sh2010110524">
+Regional planning--Maryland--Prince George's County
+</idservice:term>
+<idservice:term term-type="authorized" score="8" uri="http://id.loc.gov/authorities/subjects/sh2008116644">Prince George's County (Md.)--Maps</idservice:term>
+<idservice:term term-type="authorized" score="7" uri="http://id.loc.gov/authorities/subjects/sh00009460">National parks and reserves--Prince Edward Island</idservice:term>
+<idservice:term term-type="authorized" score="6" uri="http://id.loc.gov/authorities/subjects/sh2008109990">Princes--Austria--Biography</idservice:term>
+<idservice:term term-type="authorized" score="6" uri="http://id.loc.gov/authorities/subjects/sh87003464">Prince Rupert Forest Region (B.C.)</idservice:term>
+<idservice:term term-type="authorized" score="5" uri="http://id.loc.gov/authorities/subjects/sh95003062">Bays--Prince Edward Island</idservice:term>
+<idservice:term term-type="authorized" score="3" uri="http://id.loc.gov/authorities/subjects/sh95001562">Indian reservations--Prince Edward Island</idservice:term>
+<idservice:term term-type="authorized" score="2" uri="http://id.loc.gov/authorities/subjects/sh2008109992">Princes--Drama</idservice:term>
+<idservice:term term-type="authorized" score="1" uri="http://id.loc.gov/authorities/subjects/sh2010106678">Princes--Japan--Biography</idservice:term>
+</idservice:service>
+```
+ 
