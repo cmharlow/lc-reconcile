@@ -126,7 +126,7 @@ The test case for the following examples is the musician [Prince](http://id.loc.
 
 ###id.loc.gov/authorities/label/QUERY
 
-Content negotiation built into id.loc.gov means that this URL pattern, when QUERY exactly matches either a preferred label/heading or an alternate label/heading/cross-reference, will return the id.loc.gov record for the preferred label. If QUERY does not exactly match either a preferred label or an alternate label, it returns the id.loc.gov record for that entity's authority.
+Content negotiation built into id.loc.gov means that this URL pattern, when QUERY exactly matches either a preferred label/heading or an alternate label/heading/cross-reference, will return the id.loc.gov authority record for the entity. If QUERY does not exactly match either a preferred label or an alternate label, it returns a 404 No match found page.
 
 The default response is the HTML id.loc.gov record, though you can also receive RDF/XML, Json-LD, and possibly other formats in response. This service uses the RDF/XML response.
 
