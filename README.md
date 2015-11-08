@@ -18,7 +18,7 @@ with the ability or time to make something perfect. Improvements, corrections or
 
 Hosted version at [https://lc-reconcile.herokuapp.com/](https://lc-reconcile.herokuapp.com/). 
 This works, but easily gets overloaded. For big recon jobs, its recommended to download this repo and run locally. See 
-the **Run Locally* section below.
+the **Run Locally** section below.
 
 To run the hosted version:
 
@@ -55,6 +55,9 @@ is not meant to be documentation on the id.loc.gov possibilities, but just expla
 are used in this service.
 
 The test case for the following examples is the musician [Prince](http://id.loc.gov/authorities/names/n84079379), aka TAFKAP (among other alternate names).
+ 
+(If you want to test the following yourself, and aren't sure how, check out [Postman Chrome Add-on](https://www.getpostman.com/), 
+though most of these can be tested by entering in your web browser.)
 
 ###id.loc.gov/authorities/label/QUERY
 
@@ -69,9 +72,6 @@ You do not need to indicate the particular authority file (names or subjects) in
 indicate either if you just want responses for headings from either the NAF or the LCSH.
 
 ####Examples
- 
-(If you want to test this yourself, and aren't sure how, check out [Postman Chrome Add-on](https://www.getpostman.com/), 
-though most of these can be tested by entering in your web browser.)
 
 * http://id.loc.gov/authorities/label/Prince
 * http://id.loc.gov/authorities/label/TAFKAP
@@ -105,11 +105,179 @@ text as well as a 404-Not found.
 
 Any URL with a part of the label will return a 404 Not found - this only works with exact matches.
 
-###http://id.loc.gov/authorities/suggest/?q=QUERY
+###id.loc.gov/authorities/suggest/?q=QUERY
 
+This is a service built into id.loc.gov that returns a number of top matches for QUERY from id.loc.gov. 
 
+As far as I can tell, Suggest only returns matches based off of a preferred label/heading, not for alternate labels/headings/cross-references (see the examples below).
 
-###http://id.loc.gov/authorities/[names|subjects]/didyoumean/?label=QUERY
+It will return a JSON list of arrays, the first array being the preferred labels for the found top matches, the second array
+being the number of results for each entity of the labels in the the first array, the third being the URIs for the authorities
+for each label in the first array. Here is a simplified explanation of the output:
+
+```json
+[
+  "QUERY",
+  [
+    "QUERY Matched Label 1",
+    "QUERY Matched Label 2",
+    "QUERY Matched Label 3",
+    "QUERY Matched Label 4",
+    "QUERY Matched Label 5",
+    "QUERY Matched Label 6",
+    "QUERY Matched Label 7",
+    "QUERY Matched Label 8",
+    "QUERY Matched Label 9",
+    "QUERY Matched Label 10"
+  ],
+  [
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result",
+    "1 result"
+  ],
+  [
+    "http://id.loc.gov/authorities/names/label1URI",
+    "http://id.loc.gov/authorities/names/label2URI",
+    "http://id.loc.gov/authorities/names/label3URI",
+    "http://id.loc.gov/authorities/names/label4URI",
+    "http://id.loc.gov/authorities/names/label5URI",
+    "http://id.loc.gov/authorities/names/label6URI",
+    "http://id.loc.gov/authorities/names/label7URI",
+    "http://id.loc.gov/authorities/names/label8URI",
+    "http://id.loc.gov/authorities/names/label9URI",
+    "http://id.loc.gov/authorities/names/label10URI"
+  ]
+]
+```
+
+You do not need to indicate the particular authority file (names or subjects) in the URL for this to work, though you can 
+indicate either if you just want responses for headings from either the NAF or the LCSH.
+
+####Examples
+
+* http://id.loc.gov/authorities/suggest/?q=Prince
+* http://id.loc.gov/authorities/names/suggest/?q=Prince
+
+Both of the above, entered without other information into a web browser, return the following:
+
+```json
+[
+"Prince",
+[
+"PRINCE Programme",
+"Prince",
+"Prince & Co. (Nigeria)",
+"Prince & Docker (Liverpool, England)",
+"Prince & me",
+"Prince (Ship)",
+"Prince Agbodjan, Joseph L.",
+"Prince Albert (Musical group)",
+"Prince Albert (Sask.)",
+"Prince Albert (Ship)"
+],
+[
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result"
+],
+[
+"http://id.loc.gov/authorities/names/no99017484",
+"http://id.loc.gov/authorities/names/n84079379",
+"http://id.loc.gov/authorities/names/no2002049690",
+"http://id.loc.gov/authorities/names/n2012037490",
+"http://id.loc.gov/authorities/names/no2004051678",
+"http://id.loc.gov/authorities/names/n2006017735",
+"http://id.loc.gov/authorities/names/no2005062452",
+"http://id.loc.gov/authorities/names/no2006097687",
+"http://id.loc.gov/authorities/names/n82032086",
+"http://id.loc.gov/authorities/names/n86856559"
+]
+]
+```
+
+Note the results can change for names versus subjects versus searching both, however. But, as there are preferred labels matching the query
+'Prince' in both LCSH and LCNAF (including the Prince we're searching), performing a Suggest search with QUERY 'Prince' for
+either names or both returns suggestions with our Prince included.
+
+* http://id.loc.gov/authorities/subjects/suggest/?q=Prince
+
+The above, entered without other information into a web browser, return matches that don't include the Prince we're searching for, 
+as it includes results only from the LCSH. However, as there are terms that match/contain the query term 'Prince' in LCSH, it 
+returns those. Below is the response:
+
+```json
+[
+"Prince",
+[
+"Prince Albert Hills (Nunavut)",
+"Prince Albert National Park (Sask.)",
+"Prince Charles Mountains (Antarctica)",
+"Prince Creek Formation (Alaska)",
+"Prince Edward Island (Prince Edward Islands)",
+"Prince Edward Island National Park (P.E.I.)",
+"Prince Edward Islands",
+"Prince Edward's Bastion (England)",
+"Prince Gallitzin State Park (Pa.)",
+"Prince George's County (Md.)--Maps"
+],
+[
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result",
+"1 result"
+],
+[
+"http://id.loc.gov/authorities/subjects/sh85106711",
+"http://id.loc.gov/authorities/subjects/sh2010013966",
+"http://id.loc.gov/authorities/subjects/sh92006770",
+"http://id.loc.gov/authorities/subjects/sh91002523",
+"http://id.loc.gov/authorities/subjects/sh85106713",
+"http://id.loc.gov/authorities/subjects/sh2002010534",
+"http://id.loc.gov/authorities/subjects/sh85106714",
+"http://id.loc.gov/authorities/subjects/sh2011004575",
+"http://id.loc.gov/authorities/subjects/sh85106716",
+"http://id.loc.gov/authorities/subjects/sh2008116644"
+]
+]
+```
+
+* http://id.loc.gov/authorities/subjects/suggest/?q=TAFKAP
+* http://id.loc.gov/authorities/suggest/?q=TAFKAP
+
+The above, entered without other information into a web browser, return matches that don't include the Prince we're searching for. 
+ In fact, querying TAFKAP returns no results whatsoever, although it is a captured cross-reference/alternate label in the LCNAF 
+ authority record for Prince. See the response below:
+ 
+```json
+[
+"TAFKAP",
+[ ],
+[ ],
+[ ]
+]
+```
+
+###id.loc.gov/authorities/[names|subjects]/didyoumean/?label=QUERY
 
 ##Plans for Improvement
 
