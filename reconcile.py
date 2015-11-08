@@ -6,28 +6,17 @@ from fuzzywuzzy import fuzz
 import getopt
 import json
 from operator import itemgetter
-import rdflib
-from rdflib.namespace import SKOS
 import requests
 from sys import version_info
+import rdflib
 import urllib
-import xml.etree.ElementTree as ET
 # Help text processing
 import text
 
 app = Flask(__name__)
 
-# See if Python 3 for unicode/str use decisions
+# Capture Python 3 as boolean for 2/3 compatibility code
 PY3 = version_info > (3,)
-
-# If it's installed, use the requests_cache library to
-# cache calls to the FAST API.
-try:
-    import requests_cache
-    requests_cache.install_cache('lc_cache')
-except ImportError:
-    app.logger.debug("No request cache found.")
-    pass
 
 # Map the LoC query indexes to service types
 default_query = {
@@ -36,19 +25,15 @@ default_query = {
     "index": "/authorities"
 }
 
-refine_to_lc = [
-    {
-        "id": "Names",
-        "name": "Library of Congress Name Authority File",
-        "index": "/authorities/names"
-    },
-    {
-        "id": "Subjects",
-        "name": "Library of Congress Subject Headings",
-        "index": "/authorities/subjects"
-    }
-]
-refine_to_lc.append(default_query)
+refine_to_lc = [{
+    "id": "Names",
+    "name": "Library of Congress Name Authority File",
+    "index": "/authorities/names"
+}, {
+    "id": "Subjects",
+    "name": "Library of Congress Subject Headings",
+    "index": "/authorities/subjects"
+}, default_query]
 
 # Make a copy of the LC mappings.
 query_types = [{'id': item['id'], 'name': item['name']} for item in refine_to_lc]
@@ -76,22 +61,26 @@ def jsonpify(obj):
         return jsonify(obj)
 
 
-def search(raw_query, query_type='/lc'):
+def search(raw_query, query_type='LoC'):
     out = []
     query = text.normalize(raw_query, PY3).strip()
     query_type_meta = [i for i in refine_to_lc if i['id'] == query_type]
-    if query_type_meta == []:
+    if not query_type_meta:
         query_type_meta = default_query
     query_index = query_type_meta[0]['index']
-    # Get the results for the primary suggest API (primary headings, no cross-refs)
+    # Get the results from id.loc.gov label negotiation = exact matches only
     try:
         if PY3:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query)
+            url = "http://id.loc.gov" + query_index + '/label/' + urllib.parse.quote(query)
         else:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query)
+            url = "http://id.loc.gov" + query_index + '/label/' + urllib.quote(query)
         app.logger.debug("LC Authorities API url is " + url)
-        resp = requests.get(url)
-        results = resp.json()
+        headers = {'Accept': 'application/rdf+xml'}
+        resp = requests.get(url, headers=headers)
+        results = resp.
+
+        # PUT IN THE HANDLING OF RDF/XML RESPONSE HERE
+
     except getopt.GetoptError as e:
         app.logger.warning(e)
         return out
@@ -111,66 +100,6 @@ def search(raw_query, query_type='/lc'):
             "type": query_type_meta
         }
         out.append(resource)
-    # Get the results for the didyoumean API (cross-refs, no primary headings)
-    try:
-        if query_index != '/authorities':
-            if PY3:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query)
-            else:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query)
-            app.logger.debug("LC Authorities API url is " + url)
-            altresp = requests.get(url)
-            altresults = ET.fromstring(altresp.text)
-            altresults2 = None
-        else:
-            if PY3:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query)
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query)
-            else:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query)
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query)
-            app.logger.debug("LC Authorities API url is " + url)
-            app.logger.debug("LC Authorities API url is " + url2)
-            altresp = requests.get(url)
-            altresp2 = requests.get(url2)
-            altresults = ET.fromstring(altresp.text)
-            altresults2 = ET.fromstring(altresp2.text)
-    except getopt.GetoptError as e:
-        app.logger.warning(e)
-        return out
-    for child in altresults.iter('{http://id.loc.gov/ns/id_service#}term'):
-        match = False
-        name = child.text
-        uri = child.get('uri')
-        score = fuzz.token_sort_ratio(query, name)
-        if score > 95:
-            match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
-        resource = {
-            "id": uri,
-            "name": name,
-            "score": score,
-            "match": match,
-            "type": query_type_meta
-        }
-        out.append(resource)
-    if altresults2 is not None:
-        for child in altresults2.iter('{http://id.loc.gov/ns/id_service#}term'):
-            match = False
-            name = child.text
-            uri = child.get('uri')
-            score = fuzz.token_sort_ratio(query, name)
-            if score > 95:
-                match = True
-            app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
-            resource = {
-                "id": uri,
-                "name": name,
-                "score": score,
-                "match": match,
-                "type": query_type_meta
-            }
-            out.append(resource)
     # Sort this list containing preflabels and crossrefs by score
     sorted_out = sorted(out, key=itemgetter('score'), reverse=True)
     # Refine only will handle top three matches.
