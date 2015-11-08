@@ -76,6 +76,9 @@ arrow at the top, then Choose `Edit Columns` > `Add a new column based on this c
 * URI: cell.recon.match.id
 * Label and URI each separated by | (for easier column splitting later): cell.recon.match.name + " | " + cell.recon.match.id
 
+15. When you're down, shut down OpenRefine as you normally would. Go to the terminal where the LC Reconcile service is running
+and type in cntl + c. This will stop the service. Shut down the terminal window.
+
 Let me know if you have questions - email is charlow2(at)utk(dot)edu and Twitter handle is @cm_harlow
 
 ##Plans for Improvement
