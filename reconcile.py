@@ -133,8 +133,8 @@ def search(raw_query, query_type='/lc'):
             app.logger.debug("LC Authorities API url is " + url2)
             altresp = requests.get(url)
             altresp2 = requests.get(url2)
-            altresults = ET.fromstring(altresp.text)
-            altresults2 = ET.fromstring(altresp2.text)
+            altresults = ET.fromstring(altresp.content)
+            altresults2 = ET.fromstring(altresp2.content)
     except getopt.GetoptError as e:
         app.logger.warning(e)
         return out
