@@ -14,6 +14,8 @@ As ever, I'm writing this from the viewpoint of a metadataist who had a need to 
 
 Hosted version at [https://lc-reconcile.herokuapp.com/](https://lc-reconcile.herokuapp.com/). This works, but easily gets overloaded. For big recon jobs, its recommended to download this repo and run locally. See the **Run Locally** section below.
 
+**Second hosted version available for testing: [http://lc-reconcile.cmh2166.webfactional.com/](http://lc-reconcile.cmh2166.webfactional.com/). Please try it out and report back to Christina - @cm_harlow, cmharlow at gmail dot com.**
+
 To run the hosted version:
 
 1. Start OpenRefine (**LODRefine is NOT required, though it also works for this).
