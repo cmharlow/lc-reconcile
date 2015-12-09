@@ -14,7 +14,7 @@ As ever, I'm writing this from the viewpoint of a metadataist who had a need to 
 
 Hosted version at [https://lc-reconcile.herokuapp.com/](https://lc-reconcile.herokuapp.com/). This works, but easily gets overloaded. For big recon jobs, its recommended to download this repo and run locally. See the **Run Locally** section below.
 
-**Second hosted version available for testing: [http://lc-reconcile.cmh2166.webfactional.com/](http://lc-reconcile.cmh2166.webfactional.com/). Please try it out and report back to Christina - @cm_harlow, cmharlow at gmail dot com.**
+**Second hosted version available for testing: [http://lc-reconcile.cmh2166.webfactional.com/](http://lc-reconcile.cmh2166.webfactional.com/). Please try it out and report back to Christina - @cm_harlow, cmharlow at gmail dot com. Consider this second URL the hosted version for now; the heroku hosted version, above, will be removed in the near future.**
 
 To run the hosted version:
 
@@ -22,7 +22,7 @@ To run the hosted version:
 2. Find column you want to reconcile.
 3. Go to Reconcile > Start reconciling...
 4. Click on 'Add standard service button' in bottom left corner of reconciliation dialog box that appears.
-5. Enter the service's URL: enter the above URL - https://lc-reconcile.herokuapp.com/
+5. Enter the service's URL: enter the above URL - http://lc-reconcile.cmh2166.webfactional.com/
 6. Click Add Service.
 7. /LoC searches LCNAF and LCSH, other options just search the one chosen.
 8. Click 'start reconciling'.
