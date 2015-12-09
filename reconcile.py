@@ -86,9 +86,9 @@ def search(raw_query, query_type='/lc'):
     # Get the results for the primary suggest API (primary headings, no cross-refs)
     try:
         if PY3:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query)
+            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
         else:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query)
+            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query.encode('utf8'))
         app.logger.debug("LC Authorities API url is " + url)
         resp = requests.get(url)
         results = resp.json()
@@ -115,20 +115,20 @@ def search(raw_query, query_type='/lc'):
     try:
         if query_index != '/authorities':
             if PY3:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query)
+                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
             else:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query)
+                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
             app.logger.debug("LC Authorities API url is " + url)
             altresp = requests.get(url)
-            altresults = ET.fromstring(altresp.text)
+            altresults = ET.fromstring(altresp.content)
             altresults2 = None
         else:
             if PY3:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query)
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query)
+                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
+                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
             else:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query)
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query)
+                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
+                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
             app.logger.debug("LC Authorities API url is " + url)
             app.logger.debug("LC Authorities API url is " + url2)
             altresp = requests.get(url)
