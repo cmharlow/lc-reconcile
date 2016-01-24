@@ -57,18 +57,8 @@ metadata = {
         "url": "{{id}}"
     },
     "suggest": {
-        "type": {
-            "service_url": "http://0.0.0.0:8888/",
-            "service_path": "/suggest_type",
-            "flyout_service_url": "http://www.freebase.com"
-        },
-        "property": {
-            "service_url": "http://netflix-reconcile.freebaseapps.com",
-            "service_path": "/suggest_property",
-            "flyout_service_url": "http://www.freebase.com"
-        },
         "entity": {
-            "service_url": "http://netflix-reconcile.freebaseapps.com",
+            "service_url": "http://0.0.0.0:5000",
             "service_path": "/suggest",
             "flyout_service_path": "/flyout"
         }
@@ -198,6 +188,12 @@ def search(raw_query, query_type='/lc'):
     return sorted_out[:3]
 
 
+def suggestSearch(raw_query, query_type='/lc'):
+    out = []
+
+    return sorted_out[:3]
+
+
 @app.route("/", methods=['POST', 'GET'])
 def reconcile():
     # If a 'queries' parameter is supplied then it is a dictionary
@@ -219,20 +215,15 @@ def reconcile():
     return jsonpify(metadata)
 
 
-@app.route("/suggest", methods=['POST', 'GET'])
+@app.route("/suggest/", methods=['POST', 'GET'])
 def suggest():
-    prefixes = request.form.get('prefixes')
-    if prefixes:
-        prefixes = json.loads(prefixes)
-        results = {}
-        for (key, prefix) in prefixes.items():
-            qtype = prefix.get('type')
-            if qtype is None:
-                return jsonpify(metadata)
-            data = search(prefix['prefix'], query_type=qtype)
-            results[key] = {"result": data}
-        return jsonpify(results)
+    prefix = request.values
+    if prefix['prefix']:
+        resp = {}
+        resp['prefix'] = prefix['prefix']
+        return jsonpify(resp)
     return jsonpify(metadata)
+
 
 if __name__ == '__main__':
     from optparse import OptionParser
