@@ -6,8 +6,6 @@ from fuzzywuzzy import fuzz
 import getopt
 import json
 from operator import itemgetter
-import rdflib
-from rdflib.namespace import SKOS
 import requests
 from sys import version_info
 import urllib
@@ -20,8 +18,6 @@ app = Flask(__name__)
 # See if Python 3 for unicode/str use decisions
 PY3 = version_info > (3,)
 
-# If it's installed, use the requests_cache library to
-# cache calls to the FAST API.
 try:
     import requests_cache
     requests_cache.install_cache('lc_cache')
@@ -60,6 +56,23 @@ metadata = {
     "view": {
         "url": "{{id}}"
     },
+    "suggest": {
+        "type": {
+            "service_url": "http://0.0.0.0:8888/",
+            "service_path": "/suggest_type",
+            "flyout_service_url": "http://www.freebase.com"
+        },
+        "property": {
+            "service_url": "http://netflix-reconcile.freebaseapps.com",
+            "service_path": "/suggest_property",
+            "flyout_service_url": "http://www.freebase.com"
+        },
+        "entity": {
+            "service_url": "http://netflix-reconcile.freebaseapps.com",
+            "service_path": "/suggest",
+            "flyout_service_path": "/flyout"
+        }
+    },
 }
 
 
@@ -83,12 +96,13 @@ def search(raw_query, query_type='/lc'):
     if query_type_meta == []:
         query_type_meta = default_query
     query_index = query_type_meta[0]['index']
-    # Get the results for the primary suggest API (primary headings, no cross-refs)
     try:
         if PY3:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
+            url = ("http://id.loc.gov" + query_index + '/suggest/?q=' +
+                   urllib.parse.quote(query.encode('utf8')))
         else:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query.encode('utf8'))
+            url = ("http://id.loc.gov" + query_index + '/suggest/?q=' +
+                   urllib.quote(query.encode('utf8')))
         app.logger.debug("LC Authorities API url is " + url)
         resp = requests.get(url)
         results = resp.json()
@@ -102,7 +116,8 @@ def search(raw_query, query_type='/lc'):
         score = fuzz.token_sort_ratio(query, name)
         if score > 95:
             match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+        app.logger.debug("Label is " + name + " Score is " + str(score) +
+                         " URI is " + uri)
         resource = {
             "id": uri,
             "name": name,
@@ -115,20 +130,26 @@ def search(raw_query, query_type='/lc'):
     try:
         if query_index != '/authorities':
             if PY3:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
+                url = ("http://id.loc.gov" + query_index +
+                       '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8')))
             else:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
+                url = ("http://id.loc.gov" + query_index +
+                       '/didyoumean/?label=' + urllib.quote(query.encode('utf8')))
             app.logger.debug("LC Authorities API url is " + url)
             altresp = requests.get(url)
             altresults = ET.fromstring(altresp.content)
             altresults2 = None
         else:
             if PY3:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
+                url = ('http://id.loc.gov/authorities/names/didyoumean/?label='
+                       + urllib.parse.quote(query.encode('utf8')))
+                url2 = ('http://id.loc.gov/authorities/subjects/didyoumean/?label='
+                        + urllib.parse.quote(query.encode('utf8')))
             else:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
+                url = ('http://id.loc.gov/authorities/names/didyoumean/?label='
+                       + urllib.quote(query.encode('utf8')))
+                url2 = ('http://id.loc.gov/authorities/subjects/didyoumean/?label='
+                        + urllib.quote(query.encode('utf8')))
             app.logger.debug("LC Authorities API url is " + url)
             app.logger.debug("LC Authorities API url is " + url2)
             altresp = requests.get(url)
@@ -197,6 +218,21 @@ def reconcile():
     # we should return the service metadata.
     return jsonpify(metadata)
 
+
+@app.route("/suggest", methods=['POST', 'GET'])
+def suggest():
+    prefixes = request.form.get('prefixes')
+    if prefixes:
+        prefixes = json.loads(prefixes)
+        results = {}
+        for (key, prefix) in prefixes.items():
+            qtype = prefix.get('type')
+            if qtype is None:
+                return jsonpify(metadata)
+            data = search(prefix['prefix'], query_type=qtype)
+            results[key] = {"result": data}
+        return jsonpify(results)
+    return jsonpify(metadata)
 
 if __name__ == '__main__':
     from optparse import OptionParser
