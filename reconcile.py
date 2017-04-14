@@ -164,6 +164,7 @@ def search(raw_query, query_type='/lc'):
             "match": match,
             "type": query_type_meta
         }
+        app.logger.debug(resource)
         out.append(resource)
     if altresults2 is not None:
         for child in altresults2.iter('{http://id.loc.gov/ns/id_service#}term'):
