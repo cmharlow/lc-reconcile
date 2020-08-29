@@ -1,24 +1,20 @@
 """
 An OpenRefine reconciliation service for the id.loc.gov LCNAF/LCSH suggest API.
 """
-from flask import Flask, request, jsonify
-from fuzzywuzzy import fuzz
+from argparse import ArgumentParser
 import getopt
 import json
 from operator import itemgetter
-import rdflib
-from rdflib.namespace import SKOS
-import requests
-from sys import version_info
 import urllib
 import xml.etree.ElementTree as ET
-# Help text processing
+from flask import Flask, request, jsonify
+from flask.logging import create_logger
+from fuzzywuzzy import fuzz
+import requests
 import text
 
 app = Flask(__name__)
-
-# See if Python 3 for unicode/str use decisions
-PY3 = version_info > (3,)
+LOG = create_logger(app)
 
 # If it's installed, use the requests_cache library to
 # cache calls to the FAST API.
@@ -26,8 +22,7 @@ try:
     import requests_cache
     requests_cache.install_cache('lc_cache')
 except ImportError:
-    app.logger.debug("No request cache found.")
-    pass
+    LOG.debug("No request cache found.")
 
 # Map the LoC query indexes to service types
 default_query = {
@@ -79,23 +74,22 @@ def jsonpify(obj):
 
 
 def search(raw_query, query_type='/lc'):
+    """Map the OR Search Term to the LoC APIs, parse responses, & return"""
     out = []
-    query = text.normalize(raw_query, PY3).strip()
+    query = text.normalize(raw_query).strip()
     query_type_meta = [i for i in refine_to_lc if i['id'] == query_type]
     if query_type_meta == []:
         query_type_meta = default_query
     query_index = query_type_meta[0]['index']
     # Get the results for the primary suggest API (primary headings, no cross-refs)
     try:
-        if PY3:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
-        else:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query.encode('utf8'))
-        app.logger.debug("LC Authorities API url is " + url)
+        query_parsed = urllib.parse.quote(query.encode('utf8'))
+        url = "http://id.loc.gov" + query_index + '/suggest/?q=' + query_parsed
+        LOG.debug("LC Authorities API url is %s", url)
         resp = requests.get(url)
         results = resp.json()
     except getopt.GetoptError as e:
-        app.logger.warning(e)
+        LOG.warning(e)
         return out
     for n in range(0, len(results[1])):
         match = False
@@ -104,7 +98,7 @@ def search(raw_query, query_type='/lc'):
         score = fuzz.token_sort_ratio(query, name)
         if score > 95:
             match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+        LOG.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
         resource = {
             "id": uri,
             "name": name,
@@ -116,29 +110,24 @@ def search(raw_query, query_type='/lc'):
     # Get the results for the didyoumean API (cross-refs, no primary headings)
     try:
         if query_index != '/authorities':
-            if PY3:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            else:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
-            app.logger.debug("LC Authorities API url is " + url)
+            query_parsed = urllib.parse.quote(query.encode('utf8'))
+            url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + query_parsed
+            LOG.debug("LC Authorities API url is %s", url)
             altresp = requests.get(url)
             altresults = ET.fromstring(altresp.content)
             altresults2 = None
         else:
-            if PY3:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            else:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
-            app.logger.debug("LC Authorities API url is " + url)
-            app.logger.debug("LC Authorities API url is " + url2)
+            query_parsed = urllib.parse.quote(query.encode('utf8'))
+            url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + query_parsed
+            url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + query_parsed
+            LOG.debug("LC Authorities API url is %s", url)
+            LOG.debug("LC Authorities API url is %s", url2)
             altresp = requests.get(url)
             altresp2 = requests.get(url2)
             altresults = ET.fromstring(altresp.content)
             altresults2 = ET.fromstring(altresp2.content)
     except getopt.GetoptError as e:
-        app.logger.warning(e)
+        LOG.warning(e)
         return out
     for child in altresults.iter('{http://id.loc.gov/ns/id_service#}term'):
         match = False
@@ -147,7 +136,7 @@ def search(raw_query, query_type='/lc'):
         score = fuzz.token_sort_ratio(query, name)
         if score > 95:
             match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+        LOG.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
         resource = {
             "id": uri,
             "name": name,
@@ -164,7 +153,7 @@ def search(raw_query, query_type='/lc'):
             score = fuzz.token_sort_ratio(query, name)
             if score > 95:
                 match = True
-            app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
+            LOG.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
             resource = {
                 "id": uri,
                 "name": name,
@@ -181,9 +170,9 @@ def search(raw_query, query_type='/lc'):
 
 @app.route("/", methods=['POST', 'GET'])
 def reconcile():
-    # If a 'queries' parameter is supplied then it is a dictionary
-    # of (key, query) pairs representing a batch of queries. We
-    # should return a dictionary of (key, results) pairs.
+    """If a 'queries' parameter is supplied then it is a dictionary \
+    of (key, query) pairs representing a batch of queries. We \
+    should return a dictionary of (key, results) pairs."""
     queries = request.form.get('queries')
     if queries:
         queries = json.loads(queries)
@@ -201,10 +190,8 @@ def reconcile():
 
 
 if __name__ == '__main__':
-    from optparse import OptionParser
-
-    oparser = OptionParser()
-    oparser.add_option('-d', '--debug', action='store_true', default=False)
-    opts, args = oparser.parse_args()
-    app.debug = opts.debug
+    aparser = ArgumentParser()
+    aparser.add_argument('-d', '--debug', action='store_true', default=False)
+    args = aparser.parse_args()
+    app.debug = args.debug
     app.run(host='0.0.0.0')

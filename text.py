@@ -6,13 +6,10 @@ In process of being reviewed, modified, for LoC optimization.
 
 from unicodedata import normalize as ucnorm, category
 
-def normalize(text, PY3):
-    if PY3:
-        if not isinstance(text, str):
-            str(text, 'utf-8')
-    else:
-        if not isinstance(text, unicode):
-            text = unicode(text)
+def normalize(text):
+    """Standard text normalization functions."""
+    if not isinstance(text, str):
+        str(text, 'utf-8')
     text = text.lower()
     decomposed = ucnorm('NFKD', text)
     filtered = []
@@ -37,29 +34,22 @@ def normalize(text, PY3):
     text = text.strip()
     return ucnorm('NFKC', text)
 
-def url_slug(text, PY3):
+def url_slug(text):
+    """Create a URL Slug from common query string components."""
     text = normalize(text)
     text = text.replace(' ', '-')
     text = text.replace('.', '_')
     return text
 
 def tokenize(text, splits='COPZ'):
+    """Split strings on a given token or delimiter value."""
     token = []
-    if PY3:
-        for c in str(text, 'utf-8'):
-            if category(c)[0] in splits:
-                if len(token):
-                    yield u''.join(token)
-                token = []
-            else:
-                token.append(c)
-    else:
-        for c in unicode(text):
-            if category(c)[0] in splits:
-                if len(token):
-                    yield u''.join(token)
-                token = []
-            else:
-                token.append(c)
+    for c in str(text, 'utf-8'):
+        if category(c)[0] in splits:
+            if len(token):
+                yield u''.join(token)
+            token = []
+        else:
+            token.append(c)
     if len(token):
         yield u''.join(token)
