@@ -1,4 +1,6 @@
-# Library of Congress OpenRefine Reconciliation Service Endpoint
+# Library of Congress OpenRefine Reconciliation Service
+
+[![Maintenance](https://img.shields.io/badge/Maintained%3F-no-red.svg)](https://bitbucket.org/lbesson/ansi-colors) [![Website lc-reconcile.herokuapp.com](https://img.shields.io/website-up-down-green-red/http/cv.lbesson.qc.to.svg)](http://lc-reconcile.herokuapp.com/) https://img.shields.io/github/pipenv/locked/python-version/cmharlow/lc-reconcile
 
 ## About
 
@@ -6,7 +8,7 @@
 
 An OpenRefine reconciliation service for the Library of Congress Subject Headings (LCSH) and the Library of Congress Name Authority File (LCNAF) available via [id.loc.gov](http://id.loc.gov).
 
-See **Special Notes**, below, to explain the use of the various [id.loc.gov](http://id.loc.gov) data APIs in this service.
+See **Special Notes**, below, to explain the use of the various [id.loc.gov](http://id.loc.gov) data APIs used in this service.
 
 See the [OpenRefine Standard Reconciliation Service API documentation](https://reconciliation-api.github.io/specs/0.1/) and [my now very old presentation notes on building an OpenRefine Reconciliation Service](https://github.com/cmh2166/c4lMDCpres)to gather some understanding about what this OpenRefine Reconciliation Service attempts to do.
 
