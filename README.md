@@ -1,28 +1,26 @@
+# Library of Congress OpenRefine Reconciliation Service Endpoint
+
 ## About
 
-An OpenRefine reconciliation service for the Library of Congress Subject Headings and the Library of Congress Name Authority File available via [id.loc.gov](http://id.loc.gov).
+*I stopped using OpenRefine regularly about 4-5 years ago, and I left library technology almost 1 year ago, but I still regularly get emails and issues on these OpenRefine Repositories. So I'm attempting to clean them up for y'all, but no promises on fast repairs or responses.*
 
-**Tested with, working on python 2.7.10, 3.4.3. It works, but expect bugs. I needed for a particular project, the need is passed, but want to get this cleaned up for others to easily use. Please add issues or comments as able.**
+An OpenRefine reconciliation service for the Library of Congress Subject Headings (LCSH) and the Library of Congress Name Authority File (LCNAF) available via [id.loc.gov](http://id.loc.gov).
 
 See **Special Notes**, below, to explain the use of the various [id.loc.gov](http://id.loc.gov) data APIs in this service.
 
-See the [OpenRefine Standard Reconciliation Service API documentation (admittedly out of date)](https://github.com/OpenRefine/OpenRefine/wiki/Reconciliation-Service-API) and [my own presentation notes on building an OpenRefine Reconciliation Service (admittedly, from POV of a non-developer)](https://github.com/cmh2166/c4lMDCpres)to gather some understanding about what this OpenRefine Reconciliation Service attempts to do.
-
-As ever, I'm writing this from the viewpoint of a metadataist who had a need to fill for work projects, not a developer with the ability or time to make something perfect. Improvements, corrections or suggestions are greatly welcomed.
+See the [OpenRefine Standard Reconciliation Service API documentation](https://reconciliation-api.github.io/specs/0.1/) and [my now very old presentation notes on building an OpenRefine Reconciliation Service](https://github.com/cmh2166/c4lMDCpres)to gather some understanding about what this OpenRefine Reconciliation Service attempts to do.
 
 ## Hosted Version Instructions
 
-Hosted version at [https://lc-reconcile.herokuapp.com/](https://lc-reconcile.herokuapp.com/). This works, but easily gets overloaded. For big recon jobs, its recommended to download this repo and run locally. See the **Run Locally** section below.
-
-**Second hosted version available for testing: [http://lc-reconcile.cmh2166.webfactional.com/](http://lc-reconcile.cmh2166.webfactional.com/). Please try it out and report back to Christina - @cm_harlow, cmharlow at gmail dot com. Consider this second URL the hosted version for now; the heroku hosted version, above, will be removed in the near future.**
+Hosted version at ... somewhere to be determined.
 
 To run the hosted version:
 
-1. Start OpenRefine (**LODRefine is NOT required, though it also works for this).
+1. Start OpenRefine.
 2. Find column you want to reconcile.
 3. Go to Reconcile > Start reconciling...
 4. Click on 'Add standard service button' in bottom left corner of reconciliation dialog box that appears.
-5. Enter the service's URL: enter the above URL - http://lc-reconcile.cmh2166.webfactional.com/
+5. Enter the service's URL: enter the above URL - TBD
 6. Click Add Service.
 7. /LoC searches LCNAF and LCSH, other options just search the one chosen.
 8. Click 'start reconciling'.
@@ -31,7 +29,7 @@ To run the hosted version:
 
 Runs directly on localhost:5000 (no /reconcile needed for this recon service)
 
-Before getting started, you'll need python on your computer (this was built with python 2.7.8, updated to work with python3.4, most recently tested and worked with python 2.7.10 and 3.4.3) and be comfortable using LODRefine/OpenRefine/Google Refine.
+Before getting started, you'll need Python 3.7 on your computer and be comfortable using LODRefine/OpenRefine/Google Refine.
 
 1. Clone/download/get a copy of this code repository on your computer.
 2. In the Command Line Interface, change to the directory where you downloaded this code: `cd directory/with/code/`
@@ -60,12 +58,6 @@ So, depending on whether or not you wish to keep the original data, you can repl
 When you're down, shut down OpenRefine as you normally would. Go to the terminal where the LC Reconcile service is running and type in cntl + c. This will stop the service. Shut down the terminal window.
 
 Let me know if you have questions - email is charlow2(at)utk(dot)edu and Twitter handle is @cm_harlow
-
-## Plans for Improvement
-
-There are lots of improvements and repairs to this code forthcoming, but I needed a basic LCNAF Openrefine Recon Service like yesterday for a massive metadata migration project. Please submit pull requests and/or issues on this for any improvements or bugs found.
-
-I do want to add a new service that can handle in-OpenRefine-project search refinements. The documentation sucks on thisfunctionality for OpenRefine or the no-longer-existent Freebase API that it was built off of, so if you have any advice on this, please do let me know.
 
 ## Provenance
 
@@ -101,10 +93,6 @@ This service takes the query from your OpenRefine project - i.e. the terms you h
 3. Run the query against the id.loc.gov DidYouMean API (see **Special Notes**) for subjects only and capture the returned possible matches based off of alternate labels.
 4. Rank all the possible matches founded in steps 2 and 3 based off of fuzzy wuzzy matching/rankings between the original, normalized query and the normalized returned labels.
 5. Return the top 3 results from step 4, along with their URIs.
-
-### What I'm considering:
-
-Adding a new step 2 for all the above cases that first sees if there is an exact match found view id.loc.gov/authorities/label API (see **Special Notes**) and if such exists, return that as a match to OpenRefine, skipping the suggest and didyoumean (i.e. the fuzzy matching) services.
 
 ### Why do this?
 
