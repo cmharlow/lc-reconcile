@@ -1,5 +1,5 @@
 Flask==1.0
-fuzzywuzzy==0.6.0
+fuzzywuzzy==0.18.0
 html5lib==0.9999999
 isodate==0.6.0
 itsdangerous==0.24
