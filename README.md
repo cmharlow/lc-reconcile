@@ -2,7 +2,7 @@
 
 ## About
 
-An OpenRefine reconciliation service for the Library of Congress Subject Headings (LCSH) and the Library of Congress Name Authority File (LCNAF) available via [id.loc.gov](http://id.loc.gov).
+An OpenRefine reconciliation service for the Library of Congress Subject Headings (LCSH) and the Library of Congress Name Authority File (LCNAF), and Library of Congress Genre/Froms Terms available via [id.loc.gov](http://id.loc.gov).
 
 See **Special Notes**, below, to explain the use of the various [id.loc.gov](http://id.loc.gov) data APIs in this service.
 

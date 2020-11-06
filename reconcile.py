@@ -80,6 +80,11 @@ REFINE_TO_LC_MAP = [{
     "name": "Library of Congress Classification",
     "index": "/authorities/classification"
 },
+{
+    "id": "GenreForms",
+    "name": "Library of Congress Genre/Form Terms",
+    "index": "/authorities/genreForms"
+},
     DEFAULT_QUERY]
 
 # Basic service metadata.
@@ -204,7 +209,7 @@ def get_didyoumean(query_index, query, query_type_meta):
     """
     results = []
     if query_index == '/authorities':
-        paths = ["/authorities/subjects", "/authorities/names"]
+        paths = ["/authorities/subjects", "/authorities/names", "/authorities/genreForm"]
     else:
         paths = [query_index]
     for path in paths:
