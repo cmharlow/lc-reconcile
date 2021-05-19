@@ -4,7 +4,7 @@ html5lib==1.1
 isodate==0.6.0
 itsdangerous==0.24
 Jinja2==2.10.1
-MarkupSafe==1.1.1
+MarkupSafe==2.0.1
 pyparsing==2.4.7
 python-Levenshtein==0.12.0
 rdflib==5.0.0
