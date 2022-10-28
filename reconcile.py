@@ -1,24 +1,19 @@
 """
 An OpenRefine reconciliation service for the id.loc.gov LCNAF/LCSH suggest API.
 """
-from flask import Flask, request, jsonify
-from fuzzywuzzy import fuzz
-import getopt
 import json
-from operator import itemgetter
-import rdflib
-from rdflib.namespace import SKOS
-import requests
-from sys import version_info
 import urllib
 import xml.etree.ElementTree as ET
-# Help text processing
+from operator import itemgetter
+
+import getopt
+import requests
+from flask import Flask, request, jsonify
+from fuzzywuzzy import fuzz
+
 import text
 
 app = Flask(__name__)
-
-# See if Python 3 for unicode/str use decisions
-PY3 = version_info > (3,)
 
 # If it's installed, use the requests_cache library to
 # cache calls to the FAST API.
@@ -80,17 +75,14 @@ def jsonpify(obj):
 
 def search(raw_query, query_type='/lc'):
     out = []
-    query = text.normalize(raw_query, PY3).strip()
+    query = text.normalize(raw_query).strip()
     query_type_meta = [i for i in refine_to_lc if i['id'] == query_type]
     if query_type_meta == []:
         query_type_meta = default_query
     query_index = query_type_meta[0]['index']
     # Get the results for the primary suggest API (primary headings, no cross-refs)
     try:
-        if PY3:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
-        else:
-            url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.quote(query.encode('utf8'))
+        url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
         app.logger.debug("LC Authorities API url is " + url)
         resp = requests.get(url)
         results = resp.json()
@@ -116,21 +108,14 @@ def search(raw_query, query_type='/lc'):
     # Get the results for the didyoumean API (cross-refs, no primary headings)
     try:
         if query_index != '/authorities':
-            if PY3:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            else:
-                url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
+            url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
             app.logger.debug("LC Authorities API url is " + url)
             altresp = requests.get(url)
             altresults = ET.fromstring(altresp.content)
             altresults2 = None
         else:
-            if PY3:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            else:
-                url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
-                url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.quote(query.encode('utf8'))
+            url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
+            url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
             app.logger.debug("LC Authorities API url is " + url)
             app.logger.debug("LC Authorities API url is " + url2)
             altresp = requests.get(url)
