@@ -9,7 +9,8 @@ RUN conda env create -f environment.yml
 # Make RUN commands use the new environment:
 SHELL ["conda", "run", "-n", "lc-reconcile", "/bin/bash", "-c"]
 
-RUN conda install -c conda-forge requests-cache
+# Installed by default now
+# RUN conda install -c conda-forge requests-cache
 
 # The code to run when container is started:
 COPY *.py .
