@@ -1,66 +1,104 @@
 """
-An OpenRefine reconciliation service for the id.loc.gov LCNAF/LCSH suggest API.
+An OpenRefine reconciliation service for the id.loc.gov LCNAF/LCSH suggest/suggest2 APIs.
 """
+from collections import Counter
 import json
-import urllib
 import xml.etree.ElementTree as ET
+from datetime import timedelta
 from operator import itemgetter
+from typing import Dict, Any
 
-import getopt
 import requests
 from flask import Flask, request, jsonify
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 import text
 
 app = Flask(__name__)
 
+retry_strategy = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["HEAD", "GET", "OPTIONS"]
+)
+adapter = HTTPAdapter(max_retries=retry_strategy)
+
 # If it's installed, use the requests_cache library to
 # cache calls to the FAST API.
 try:
     import requests_cache
-    requests_cache.install_cache('lc_cache')
+    # The expire_after parameter can be used to control expiration times.
+    # by default entries never expire. The cache lives in a subdirectory called lc_cache, which may grow substantially.
+    http: requests.Session = requests_cache.CachedSession(cache_name='lc_cache')
+    http.remove_expired_responses()  # No-op in the current configuration
 except ImportError:
-    app.logger.debug("No request cache found.")
-    pass
+    http: requests.Session = requests.Session()
+    app.logger.warn("No request cache found.")
+
+http.mount("https://", adapter)
+http.mount("http://", adapter)
+http.headers.update({
+    "User-Agent": "LCNAF Reconciliation Service - operated by {opts.operator} - source https://github.com/tfmorris/lc-reconcile "
+})
+
+
+BASE_URL = "https://id.loc.gov"
+ENABLE_DID_YOU_MEAN = True  # Not sure this adds much value
+ENABLE_SUGGEST = True
+ENABLE_SUGGEST2 = False
+DEFAULT_LIMIT = 5
+MATCH_SCORE_THRESHOLD = 95  # Anything above this score will be considered an automatic match
+REQUEST_TIMEOUT_SECONDS = 5
+
 
 # Map the LoC query indexes to service types
-default_query = {
+DEFAULT_QUERY = {
     "id": "LoC",
     "name": "LCNAF & LCSH",
     "index": "/authorities"
 }
 
-refine_to_lc = [
-    {
-        "id": "Names",
-        "name": "Library of Congress Name Authority File",
-        "index": "/authorities/names"
-    },
-    {
-        "id": "Subjects",
-        "name": "Library of Congress Subject Headings",
-        "index": "/authorities/subjects"
-    }
-]
-refine_to_lc.append(default_query)
-
-# Make a copy of the LC mappings.
-query_types = [{'id': item['id'], 'name': item['name']} for item in refine_to_lc]
+# TODO There are a bunch of things which could be added here.
+# We could also have separate entries for suggest2 vs suggest
+REFINE_TO_LC_MAP = [{
+    "id": "Names",
+    "name": "Library of Congress Name Authority File",
+    "index": "/authorities/names"
+}, {
+    "id": "Subjects",
+    "name": "Library of Congress Subject Headings",
+    "index": "/authorities/subjects"
+}, {
+    "id": "ChildrensSubjects",
+    "name": "LC Children's Subject Headings",
+    "index": "/authorities/childrensSubjects"
+}, {
+    "id": "Classification",
+    "name": "Library of Congress Classification",
+    "index": "/authorities/classification"
+},
+    DEFAULT_QUERY]
 
 # Basic service metadata.
-metadata = {
+METADATA = {
     "name": "LoC Reconciliation Service",
-    "defaultTypes": query_types,
-    "identifierSpace" : "http://localhost/identifier",
-    "schemaSpace" : "http://localhost/schema",
+    "defaultTypes": [{'id': item['id'], 'name': item['name']} for item in REFINE_TO_LC_MAP],
+    "identifierSpace": "http://localhost/identifier",
+    "schemaSpace": "http://localhost/schema",
     "view": {
         "url": "{{id}}"
     },
 }
 
+total_gets: int = Counter()  # Uncached network GETs by status code
+total_cached: int = 0
+total_elapsed: timedelta = timedelta(0)
 
-def jsonpify(obj):
+
+def jsonpify(obj: Any):
     """
     Helper to support JSONP
     """
@@ -73,95 +111,113 @@ def jsonpify(obj):
         return jsonify(obj)
 
 
-def search(raw_query, query_type='/lc'):
+def http_get(url: str, params: Dict[str, str]):
+    """
+    Send an HTTP GET request with timeout and update all our stats on reply
+    """
+    app.logger.debug("Making GET request to url: " + url)
+    # TODO: Add rate limiting?
+    resp = http.get(url, params=params, timeout=REQUEST_TIMEOUT_SECONDS)
+    global total_gets, total_cached, total_elapsed
+    if hasattr(resp, 'from_cache') and resp.from_cache:
+        total_cached += 1
+    else:
+        total_elapsed += resp.elapsed
+        total_gets[resp.status_code] += 1
+    return resp
+
+
+def build_result(name: str, query: str, query_type_meta: dict, uri: str):
+    score: float = fuzz.token_sort_ratio(query, name)
+    resource = {
+        "id": uri,
+        "name": name,
+        "score": score,
+        "match": score > MATCH_SCORE_THRESHOLD,
+        "type": query_type_meta
+    }
+    app.logger.debug(f"Label is {name}. Score is {score}. URI is {uri}")
+    return resource
+
+
+def search(raw_query: str, query_type='/lc', limit=DEFAULT_LIMIT):
     out = []
-    query = text.normalize(raw_query).strip()
-    query_type_meta = [i for i in refine_to_lc if i['id'] == query_type]
-    if query_type_meta == []:
-        query_type_meta = default_query
+    query: str = text.normalize(raw_query).strip()
+    query_type_meta = [i for i in REFINE_TO_LC_MAP if i['id'] == query_type]
+    if not query_type_meta:
+        query_type_meta = DEFAULT_QUERY
     query_index = query_type_meta[0]['index']
-    # Get the results for the primary suggest API (primary headings, no cross-refs)
-    try:
-        url = "http://id.loc.gov" + query_index + '/suggest/?q=' + urllib.parse.quote(query.encode('utf8'))
-        app.logger.debug("LC Authorities API url is " + url)
-        resp = requests.get(url)
-        results = resp.json()
-    except getopt.GetoptError as e:
-        app.logger.warning(e)
-        return out
-    for n in range(0, len(results[1])):
-        match = False
-        name = results[1][n]
-        uri = results[3][n]
-        score = fuzz.token_sort_ratio(query, name)
-        if score > 95:
-            match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
-        resource = {
-            "id": uri,
-            "name": name,
-            "score": score,
-            "match": match,
-            "type": query_type_meta
-        }
-        out.append(resource)
-    # Get the results for the didyoumean API (cross-refs, no primary headings)
-    try:
-        if query_index != '/authorities':
-            url = "http://id.loc.gov" + query_index + '/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            app.logger.debug("LC Authorities API url is " + url)
-            altresp = requests.get(url)
-            altresults = ET.fromstring(altresp.content)
-            altresults2 = None
-        else:
-            url = 'http://id.loc.gov/authorities/names/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            url2 = 'http://id.loc.gov/authorities/subjects/didyoumean/?label=' + urllib.parse.quote(query.encode('utf8'))
-            app.logger.debug("LC Authorities API url is " + url)
-            app.logger.debug("LC Authorities API url is " + url2)
-            altresp = requests.get(url)
-            altresp2 = requests.get(url2)
-            altresults = ET.fromstring(altresp.content)
-            altresults2 = ET.fromstring(altresp2.content)
-    except getopt.GetoptError as e:
-        app.logger.warning(e)
-        return out
-    for child in altresults.iter('{http://id.loc.gov/ns/id_service#}term'):
-        match = False
-        name = child.text
-        uri = child.get('uri')
-        score = fuzz.token_sort_ratio(query, name)
-        if score > 95:
-            match = True
-        app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
-        resource = {
-            "id": uri,
-            "name": name,
-            "score": score,
-            "match": match,
-            "type": query_type_meta
-        }
-        out.append(resource)
-    if altresults2 is not None:
-        for child in altresults2.iter('{http://id.loc.gov/ns/id_service#}term'):
-            match = False
-            name = child.text
-            uri = child.get('uri')
-            score = fuzz.token_sort_ratio(query, name)
-            if score > 95:
-                match = True
-            app.logger.debug("Label is " + name + " Score is " + str(score) + " URI is " + uri)
-            resource = {
-                "id": uri,
-                "name": name,
-                "score": score,
-                "match": match,
-                "type": query_type_meta
-            }
-            out.append(resource)
-    # Sort this list containing preflabels and crossrefs by score
+
+    if ENABLE_SUGGEST:
+        out.extend(get_suggest(query, query_index, query_type_meta, limit))
+    if ENABLE_SUGGEST2:
+        out.extend(get_suggest2(query, query_index, query_type_meta, limit))
+    if ENABLE_DID_YOU_MEAN:
+        out.extend(get_didyoumean(query_index, query, query_type_meta))
+
+    # Sort this list containing preflabels and crossrefs by descending score
     sorted_out = sorted(out, key=itemgetter('score'), reverse=True)
-    # Refine only will handle top three matches.
-    return sorted_out[:3]
+    return sorted_out[:limit]
+
+
+def get_suggest(query, query_index, query_type_meta, limit):
+    """ Get the results for the primary suggest API (primary headings, no cross-refs, left-anchored)"""
+    out = []
+    url = BASE_URL + query_index + '/suggest/'
+    params = {'q': query,
+              # 'searchType': 'keyword',  # suggest2 only
+              'count': limit,
+              }
+    resp = http_get(url, params)
+    if resp.ok:
+        results = resp.json()
+        # Results are returned an array with 0) query term, 1) result labels, 2) results counts (always 1?), 3) URIs
+        if results:
+            for name, uri in zip(results[1], results[3]):
+                out.append(build_result(name, query, query_type_meta, uri))
+        else:
+            app.logger.warn('Got malformed suggest response with empty top level array')
+    return out
+
+
+def get_suggest2(query, query_index, query_type_meta, limit):
+    """ Get the results for the suggest2 API - all indexes, keyword search"""
+    out = []
+    url = BASE_URL + query_index + '/suggest2/'
+    params = {'q': query,
+              'searchType': 'keyword',
+              'count': limit,
+              }
+    resp = http_get(url, params)
+    if resp.ok:
+        results = resp.json()
+        if 'hits' in results:
+            for hit in results['hits']:
+                # TODO: We get a score return in hit['rank'], but it's not clear how to scale it appropriately
+                out.append(build_result(hit['aLabel'], query, query_type_meta, hit['uri']))
+    return out
+
+
+def get_didyoumean(query_index, query, query_type_meta):
+    """
+    Query the XML-based Did You Mean API for additional results (cross-refs, no primary headings)
+    """
+    results = []
+    if query_index == '/authorities':
+        paths = ["/authorities/subjects", "/authorities/names"]
+    else:
+        paths = [query_index]
+    for path in paths:
+        url = BASE_URL + path + '/didyoumean/'
+        resp = http_get(url, {"label": query})
+        if resp.ok:
+            tree = ET.fromstring(resp.content)
+            for child in tree.iter('{http://id.loc.gov/ns/id_service#}term'):
+                results.append(build_result(child.text, query, query_type_meta, child.get('uri')))
+
+        else:
+            app.logger.error(f"Got non-success status {resp.status_code} for url {resp.url}")
+    return results
 
 
 @app.route("/", methods=['POST', 'GET'])
@@ -175,14 +231,29 @@ def reconcile():
         results = {}
         for (key, query) in queries.items():
             qtype = query.get('type')
-            if qtype is None:
-                return jsonpify(metadata)
-            data = search(query['query'], query_type=qtype)
+            # type_strict = query.get('type_strict')  # We always assume strict typing, so this is ignored
+            limit = query.get('limit')
+            if not qtype:
+                dump_stats()
+                return jsonpify(METADATA)
+            data = search(query['query'], query_type=qtype, limit=limit)
             results[key] = {"result": data}
+        dump_stats()
         return jsonpify(results)
     # If neither a 'query' nor 'queries' parameter is supplied then
     # we should return the service metadata.
-    return jsonpify(metadata)
+    return jsonpify(METADATA)
+
+
+def dump_stats():
+    # print(total_gets, total_cached, total_elapsed)
+    if total_gets[200]:
+        latency = total_elapsed / total_gets[200]
+    else:
+        latency = 0
+    # TODO: This logging doesn't work at shutdown, perhaps using print() instead?
+    app.logger.debug(
+        f"Network requests: {total_gets}. Avg latency: {latency}. Cached requests: {total_cached}")
 
 
 if __name__ == '__main__':
@@ -192,4 +263,10 @@ if __name__ == '__main__':
     oparser.add_option('-d', '--debug', action='store_true', default=False)
     opts, args = oparser.parse_args()
     app.debug = opts.debug
+    if not args:
+        print("First argument must be a string identifying the operator of this service (required by LoC)")
+        exit(1)
+    app.logger.debug(f'Setting operator string to "{args[0]}"')
     app.run(host='0.0.0.0')
+    # TODO: The logging doesn't work in this function at shutdown
+    dump_stats()

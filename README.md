@@ -2,8 +2,6 @@
 
 ## About
 
-*I stopped using OpenRefine regularly about 4-5 years ago, and I left library technology almost 1 year ago, but I still regularly get emails and issues on these OpenRefine Repositories. So I'm attempting to clean them up for y'all, but no promises on fast repairs or responses.*
-
 An OpenRefine reconciliation service for the Library of Congress Subject Headings (LCSH) and the Library of Congress Name Authority File (LCNAF) available via [id.loc.gov](http://id.loc.gov).
 
 See **Special Notes**, below, to explain the use of the various [id.loc.gov](http://id.loc.gov) data APIs in this service.
@@ -33,8 +31,12 @@ Before getting started, you'll need Python 3.7 on your computer and be comfortab
 
 1. Clone/download/get a copy of this code repository on your computer.
 2. In the Command Line Interface, change to the directory where you downloaded this code: `cd directory/with/code/`
-3. Install the requirements needed: `pip install -r requirements.txt` (note, I'm updating that to reflect what is currently used - expect bugs + bumps + beautiful mistakes on my part right now).
-4. Type in: `python reconcile.py --debug` (you don't need to use debug but this is helpful for knowing what this service is up to while you are working with it).
+3. Install the requirements needed:
+   1. Install miniconda, if you don't already have it or Anaconda - https://docs.conda.io/en/latest/miniconda.html
+   2. Optionally install mamba - `conda install -c base mamba`
+   3. Create environment - `mamba env create -f environment.yml`
+   4. Optionally install Python Requests cache module (recommended) - `mamba install requests-cache` NOTE that this directory can grow in size significantly with usage.
+4. Type in: `python reconcile.py --debug "your name email@example.com"` (Name & email is for LoC so they know who to contact if there's a problem with use of their APIs. you don't need to use debug but this is helpful for knowing what this service is up to while you are working with it).
 5. You should see a screen telling you that the service is `Running on http://0.0.0.0:5000/`
 6. Leaving that terminal window open and the service running, go start up OpenRefine (however you normally go about it). Open a project in OpenRefine.
 7. On the column you would like to reconcile with LCNAF or LCSH (or both), click on the arrow at the top, choose
@@ -65,6 +67,10 @@ Michael Stephens wrote a [demo reconciliation service](https://github.com/mikejs
 
 All of the access to [id.loc.gov](http://id.loc.gov/) that this OpenRefine Reconciliation service builds off of is
 indebted to those who made/make id.loc.gov an option. Special thanks to Kevin Ford for reaching out and helping with understanding the various id.loc.gov query options.
+
+Christine Harlow wrote the original lc-reconcile.
+
+Tom Morris updated as described at the bottom of this file.
 
 ## How This Service Handles Your Query
 
@@ -414,3 +420,22 @@ Regional planning--Maryland--Prince George's County
 <idservice:term term-type="authorized" score="1" uri="http://id.loc.gov/authorities/subjects/sh2010106678">Princes--Japan--Biography</idservice:term>
 </idservice:service>
 ```
+
+Changes made by Tom Morris (@tfmorris) to Christine Harlow's version:
+* Add support for Suggest2 service
+* honor `limit` parameter from the reconciliation request
+* added HTTP request header (as requested by LoC) with operator's name (now required on the command line)
+* added HTTP retries (3) with backoff (0.5, 1, 2 seconds)
+* added timeouts to HTTP gets so that the server can't hang
+* Add metrics for latency, caching effectiveness, total requests, responses by status code
+* remove Python 2 support
+* switch to Conda for dependencies
+* remove unused dependencies
+* refactor to minimize redundant code
+* switch to more liberally licensed (plus more modern and faster) `rapdifuzz` library
+
+TODO:
+* Add more type hints
+* add rate limiting
+* figure out which of the suggest/suggest2/didyoumean services are most useful
+ 
