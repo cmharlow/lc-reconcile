@@ -1,0 +1,8 @@
+# run: conda env create --file environment.yml
+name: lc-reconcile
+dependencies:
+  - python=3.10 # Pinned because 3.11 has issues
+  - flask
+  - requests
+  - rapidfuzz
+
